@@ -141,6 +141,10 @@
 .syncBad{color:var(--red)}
 .syncWarn{color:var(--gold2)}
 
+
+/* === SYNC IOS SAFE PATCH v2 CSS === */
+#syncHelpTextV2{font-size:12px;color:var(--muted);line-height:1.45}
+
 </style>
 </head>
 <body>
@@ -211,9 +215,11 @@
   <input id="syncPass" type="password" class="input" placeholder="минимум 8 символов">
   <button class="primary" data-action="saveSyncSettings">Сохранить настройки</button>
   <button class="primary" data-action="syncNowSafe">Синхронизировать безопасно</button>
+  <button class="ghost" data-action="testSyncConnection">Проверить соединение</button>
   <button class="ghost" data-action="exportBackup">Скачать backup перед синком</button>
   <button class="ghost danger" data-action="clearSyncSettings">Очистить настройки синхронизации</button>
   <div id="syncStatus" class="statusLine">Сначала скачай backup на Mac и iPhone. Потом подключай синхронизацию.</div>
+  <div id="syncHelpTextV2" class="statusLine">Если на iPhone ошибка — нажми «Проверить соединение». Если пишет про пароль — значит пароль шифрования отличается от Mac.</div>
 </div>
 </section>
 
@@ -327,7 +333,7 @@ function lockNow(){if(S.security&&S.security.pinHash){id('lockOverlay').classLis
 function unlockPin(){var p=id('unlockPin').value||'';if(S.security&&simpleHash(p)===S.security.pinHash){id('lockOverlay').classList.remove('open');id('unlockPin').value='';id('lockMsg').innerHTML=''}else{id('lockMsg').innerHTML='Неверный PIN'}}
 function renderSecurity(){if(id('pinStatus'))id('pinStatus').innerHTML=(S.security&&S.security.pinHash)?'PIN включён':'PIN не включён';if(id('backupStatus')&&!id('backupStatus').innerHTML)id('backupStatus').innerHTML='Backup можно скачать в любой момент'}
 
-function bind(){document.addEventListener('click',function(e){var t=e.target;while(t&&t!==document&&!t.getAttribute('data-action')&&!t.getAttribute('data-screen')&&!t.getAttribute('data-client')&&!t.getAttribute('data-date')&&!t.getAttribute('data-add-slot')&&!t.getAttribute('data-note')&&!t.getAttribute('data-client-note')&&!t.getAttribute('data-edit-pay')&&!t.getAttribute('data-edit-payment')&&!t.getAttribute('data-pay-status')&&!t.getAttribute('data-open-link')&&!t.getAttribute('data-del-link'))t=t.parentNode;if(!t||t===document)return;if(t.getAttribute('data-screen'))return setScreen(t.getAttribute('data-screen'));if(t.getAttribute('data-client'))return openDetail(t.getAttribute('data-client'));if(t.getAttribute('data-date')){selectedDate=t.getAttribute('data-date');return renderSchedule()}if(t.getAttribute('data-add-slot'))return openSessionForm(selectedDate,t.getAttribute('data-add-slot'));if(t.getAttribute('data-note'))return openNote(t.getAttribute('data-note'));if(t.getAttribute('data-client-note'))return openClientNote(t.getAttribute('data-client-note'));if(t.getAttribute('data-edit-pay'))return openPaymentEdit(t.getAttribute('data-edit-pay'));if(t.getAttribute('data-edit-payment'))return openPayment(S.payments.find(function(p){return p.id===t.getAttribute('data-edit-payment')}));if(t.getAttribute('data-pay-status'))return setPayStatus(t.getAttribute('data-pay-status'),t.getAttribute('data-status'));if(t.getAttribute('data-open-link'))return openSavedLink(t.getAttribute('data-open-link'));if(t.getAttribute('data-del-link'))return deleteSavedLink(t.getAttribute('data-del-link'));var a=t.getAttribute('data-action');if(a==='addClient')openClientForm(null);else if(a==='saveClient')saveClient();else if(a==='editClient'){var c=client(currentClient);closeModals();openClientForm(c)}else if(a==='deleteClient')deleteClient();else if(a==='close')closeModals();else if(a==='addSession')openSessionForm(selectedDate,'12:00');else if(a==='saveSession')saveSession();else if(a==='addNote')openNote('');else if(a==='saveNote')saveNote();else if(a==='deleteNote')deleteNote();else if(a==='savePrices')savePrices();else if(a==='payDebt')payDebt();else if(a==='buyPackage')buyPackage();else if(a==='usePackage')usePackage();else if(a==='savePayment')savePayment();else if(a==='deletePayment')deletePayment();else if(a==='savePaymentEdit')savePaymentEdit();else if(a==='deleteSession')deleteSession();else if(a==='addClientNote')openClientNote('');else if(a==='saveClientNote')saveClientNote();else if(a==='deleteClientNote')deleteClientNote();else if(a==='openClientLinks')openClientLinks();else if(a==='saveClientLink')saveClientLink();else if(a==='exportBackup')exportBackup();else if(a==='importBackup')importBackup();else if(a==='setPin')setPin();else if(a==='clearPin')clearPin();else if(a==='lockNow')lockNow();else if(a==='unlockPin')unlockPin();else if(a==='saveSyncSettings')saveSyncSettings();else if(a==='syncNowSafe')syncNowSafe();else if(a==='clearSyncSettings')clearSyncSettings();else if(a==='prevMonth'){calDate.setMonth(calDate.getMonth()-1);renderSchedule()}else if(a==='nextMonth'){calDate.setMonth(calDate.getMonth()+1);renderSchedule()}});id('search').oninput=renderClients;qsa('[data-filter]').forEach(function(b){b.onclick=function(){filter=this.getAttribute('data-filter');qsa('[data-filter]').forEach(function(x){x.classList.remove('active')});this.classList.add('active');renderClients()}});qsa('[data-period]').forEach(function(b){b.onclick=function(){period=this.getAttribute('data-period');qsa('[data-period]').forEach(function(x){x.classList.remove('active')});this.classList.add('active');renderAnalytics()}});qsa('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)closeModals()})})}
+function bind(){document.addEventListener('click',function(e){var t=e.target;while(t&&t!==document&&!t.getAttribute('data-action')&&!t.getAttribute('data-screen')&&!t.getAttribute('data-client')&&!t.getAttribute('data-date')&&!t.getAttribute('data-add-slot')&&!t.getAttribute('data-note')&&!t.getAttribute('data-client-note')&&!t.getAttribute('data-edit-pay')&&!t.getAttribute('data-edit-payment')&&!t.getAttribute('data-pay-status')&&!t.getAttribute('data-open-link')&&!t.getAttribute('data-del-link'))t=t.parentNode;if(!t||t===document)return;if(t.getAttribute('data-screen'))return setScreen(t.getAttribute('data-screen'));if(t.getAttribute('data-client'))return openDetail(t.getAttribute('data-client'));if(t.getAttribute('data-date')){selectedDate=t.getAttribute('data-date');return renderSchedule()}if(t.getAttribute('data-add-slot'))return openSessionForm(selectedDate,t.getAttribute('data-add-slot'));if(t.getAttribute('data-note'))return openNote(t.getAttribute('data-note'));if(t.getAttribute('data-client-note'))return openClientNote(t.getAttribute('data-client-note'));if(t.getAttribute('data-edit-pay'))return openPaymentEdit(t.getAttribute('data-edit-pay'));if(t.getAttribute('data-edit-payment'))return openPayment(S.payments.find(function(p){return p.id===t.getAttribute('data-edit-payment')}));if(t.getAttribute('data-pay-status'))return setPayStatus(t.getAttribute('data-pay-status'),t.getAttribute('data-status'));if(t.getAttribute('data-open-link'))return openSavedLink(t.getAttribute('data-open-link'));if(t.getAttribute('data-del-link'))return deleteSavedLink(t.getAttribute('data-del-link'));var a=t.getAttribute('data-action');if(a==='addClient')openClientForm(null);else if(a==='saveClient')saveClient();else if(a==='editClient'){var c=client(currentClient);closeModals();openClientForm(c)}else if(a==='deleteClient')deleteClient();else if(a==='close')closeModals();else if(a==='addSession')openSessionForm(selectedDate,'12:00');else if(a==='saveSession')saveSession();else if(a==='addNote')openNote('');else if(a==='saveNote')saveNote();else if(a==='deleteNote')deleteNote();else if(a==='savePrices')savePrices();else if(a==='payDebt')payDebt();else if(a==='buyPackage')buyPackage();else if(a==='usePackage')usePackage();else if(a==='savePayment')savePayment();else if(a==='deletePayment')deletePayment();else if(a==='savePaymentEdit')savePaymentEdit();else if(a==='deleteSession')deleteSession();else if(a==='addClientNote')openClientNote('');else if(a==='saveClientNote')saveClientNote();else if(a==='deleteClientNote')deleteClientNote();else if(a==='openClientLinks')openClientLinks();else if(a==='saveClientLink')saveClientLink();else if(a==='exportBackup')exportBackup();else if(a==='importBackup')importBackup();else if(a==='setPin')setPin();else if(a==='clearPin')clearPin();else if(a==='lockNow')lockNow();else if(a==='unlockPin')unlockPin();else if(a==='testSyncConnection')testSyncConnection();else if(a==='saveSyncSettings')saveSyncSettings();else if(a==='syncNowSafe')syncNowSafe();else if(a==='clearSyncSettings')clearSyncSettings();else if(a==='prevMonth'){calDate.setMonth(calDate.getMonth()-1);renderSchedule()}else if(a==='nextMonth'){calDate.setMonth(calDate.getMonth()+1);renderSchedule()}});id('search').oninput=renderClients;qsa('[data-filter]').forEach(function(b){b.onclick=function(){filter=this.getAttribute('data-filter');qsa('[data-filter]').forEach(function(x){x.classList.remove('active')});this.classList.add('active');renderClients()}});qsa('[data-period]').forEach(function(b){b.onclick=function(){period=this.getAttribute('data-period');qsa('[data-period]').forEach(function(x){x.classList.remove('active')});this.classList.add('active');renderAnalytics()}});qsa('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)closeModals()})})}
 function init(){id('debug').className='debug ok';id('debug').innerHTML='JS работает · фото встроено · CRM Stable';bind();renderAll()}
 window.onerror=function(msg,src,line){var d=id('debug');if(d){d.className='debug bad';d.innerHTML='ОШИБКА JS: '+esc(msg)+' строка '+line}return false};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
@@ -519,6 +525,165 @@ async function syncNowSafe(){
     syncStatus('Готово.\nДанные объединены безопасно.\nЛокальный backup создан перед синхронизацией.\nТеперь на втором устройстве введи тот же пароль и нажми «Синхронизировать безопасно».','syncOk');
   }catch(e){
     syncStatus('Синхронизация остановлена: '+e.message+'\nЛокальные данные не удалены. Перед синком был создан backup.','syncBad');
+  }
+}
+
+
+/* === SYNC IOS SAFE PATCH v2 JS === */
+function normalizeSyncUrl(v){
+  v=String(v||'').trim();
+  v=v.replace(/\s+/g,'');
+  v=v.replace(/\/+$/,'');
+  if(v.indexOf('/rest/v1')>-1)v=v.split('/rest/v1')[0];
+  return v;
+}
+function normalizeSyncKey(v){
+  return String(v||'').trim().replace(/\s+/g,'');
+}
+function saveSyncSettings(){
+  S.security=S.security||{};
+  S.security.sync={
+    url:normalizeSyncUrl(id('syncUrl')?id('syncUrl').value:''),
+    key:normalizeSyncKey(id('syncKey')?id('syncKey').value:''),
+    user:(id('syncUser')?id('syncUser').value:'nika-main').trim()||'nika-main'
+  };
+  if(id('syncUrl'))id('syncUrl').value=S.security.sync.url;
+  if(id('syncKey'))id('syncKey').value=S.security.sync.key;
+  if(id('syncUser'))id('syncUser').value=S.security.sync.user;
+  save();
+  syncStatus('Настройки сохранены.\nURL и key очищены от пробелов и лишнего /rest/v1.\nПароль не сохраняется — его нужно вводить при синхронизации.','syncOk');
+}
+function syncReadyV2(){
+  var c=getSyncSettings();
+  if(id('syncUrl'))c.url=normalizeSyncUrl(id('syncUrl').value);
+  if(id('syncKey'))c.key=normalizeSyncKey(id('syncKey').value);
+  if(id('syncUser'))c.user=(id('syncUser').value||'nika-main').trim()||'nika-main';
+  S.security=S.security||{};
+  S.security.sync=c;
+  save();
+
+  var pass=id('syncPass')?id('syncPass').value:'';
+
+  if(!c.url||c.url.indexOf('https://')!==0||c.url.indexOf('.supabase.co')<0){
+    syncStatus('Ошибка URL.\nДолжно быть так:\nhttps://xxxxx.supabase.co\nБез /rest/v1 и без пробелов.','syncBad');
+    return false;
+  }
+  if(!c.key||c.key.indexOf('sb_publishable_')!==0){
+    syncStatus('Ошибка key.\nКлюч должен начинаться с:\nsb_publishable_\nСкопируй кнопкой COPY из Supabase → Settings → API Keys.','syncBad');
+    return false;
+  }
+  if(c.key.length<35){
+    syncStatus('Ключ выглядит слишком коротким.\nСкорее всего он обрезался при копировании.\nСкопируй заново кнопкой COPY.','syncBad');
+    return false;
+  }
+  if(!c.user){
+    syncStatus('Заполни ID базы. Обычно: nika-main','syncBad');
+    return false;
+  }
+  if(!pass||pass.length<8){
+    syncStatus('Введи пароль шифрования минимум 8 символов.\nВажно: на iPhone должен быть ТОТ ЖЕ пароль, что был на Mac при первом sync.','syncBad');
+    return false;
+  }
+  if(!window.crypto||!crypto.subtle){
+    syncStatus('На этом браузере недоступно шифрование WebCrypto.\nОткрой CRM именно в Safari по HTTPS/GitHub Pages, не через Telegram и не через file://.','syncBad');
+    return false;
+  }
+  return true;
+}
+async function supaFetchSafe(method,body){
+  var c=getSyncSettings();
+  c.url=normalizeSyncUrl(c.url);
+  c.key=normalizeSyncKey(c.key);
+  var url=c.url+'/rest/v1/nika_crm';
+  if(method==='GET')url+='?id=eq.'+encodeURIComponent(c.user)+'&select=payload,updated_at';
+  var headers={
+    'apikey':c.key,
+    'Authorization':'Bearer '+c.key,
+    'Content-Type':'application/json',
+    'Accept':'application/json'
+  };
+  if(method==='POST')headers['Prefer']='resolution=merge-duplicates,return=minimal';
+  var res;
+  try{
+    res=await fetch(url,{method:method,headers:headers,body:body?JSON.stringify(body):undefined,cache:'no-store'});
+  }catch(e){
+    throw new Error('iPhone/Safari не смог подключиться к Supabase: '+(e.message||'Load failed')+'. Открой через обычный Safari, отключи VPN/iCloud Private Relay/блокировщик, проверь интернет.');
+  }
+  if(!res.ok){
+    var txt='';
+    try{txt=await res.text();}catch(e){}
+    if(res.status===401)throw new Error('Supabase 401: неверный API key или ключ от другого проекта. Скопируй publishable key заново кнопкой COPY.');
+    if(res.status===404)throw new Error('Supabase 404: таблица nika_crm не найдена или URL не от этого проекта.');
+    if(res.status===403)throw new Error('Supabase 403: нет доступа. Проверь RLS policy.');
+    throw new Error('Supabase '+res.status+': '+txt.slice(0,180));
+  }
+  if(method==='GET')return res.json();
+  return res.text();
+}
+async function decryptSyncPayload(payload,pass){
+  try{
+    var salt=new Uint8Array(fromB64(payload.salt));
+    var iv=new Uint8Array(fromB64(payload.iv));
+    var key=await deriveSyncKey(pass,salt);
+    var plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,fromB64(payload.cipher));
+    return JSON.parse(decBytes(plain));
+  }catch(e){
+    throw new Error('Пароль шифрования не совпал с тем, которым была создана облачная база на Mac. Введи ТОТ ЖЕ пароль. Данные не удалены.');
+  }
+}
+async function testSyncConnection(){
+  saveSyncSettings();
+  if(!syncReadyV2())return;
+  try{
+    syncStatus('Проверяю соединение с Supabase...','syncWarn');
+    var rows=await supaFetchSafe('GET');
+    if(rows&&rows[0]&&rows[0].payload){
+      syncStatus('Соединение работает.\nОблачная база найдена.\nТеперь можно нажать «Синхронизировать безопасно».\nЕсли дальше будет ошибка — почти точно пароль шифрования не совпал.','syncOk');
+    }else{
+      syncStatus('Соединение работает.\nОблако пока пустое для ID: '+getSyncSettings().user+'\nМожно синхронизировать.','syncOk');
+    }
+  }catch(e){
+    syncStatus('Проверка соединения не прошла:\n'+e.message,'syncBad');
+  }
+}
+async function syncNowSafe(){
+  saveSyncSettings();
+  if(!syncReadyV2())return;
+  try{
+    syncStatus('1/5 Создаю локальный backup перед синхронизацией...','syncWarn');
+    makeManualBackupBeforeSync();
+    var pass=id('syncPass').value;
+    var local=ensureSyncShape(clone(S));
+
+    syncStatus('2/5 Проверяю Supabase и скачиваю облачные данные...','syncWarn');
+    var rows=await supaFetchSafe('GET');
+
+    var cloud=null;
+    if(rows&&rows[0]&&rows[0].payload){
+      syncStatus('3/5 Облачная база найдена. Расшифровываю...\nЕсли пароль отличается от Mac — здесь будет понятная ошибка.','syncWarn');
+      cloud=await decryptSyncPayload(rows[0].payload,pass);
+    }else{
+      syncStatus('3/5 Облако пустое. Создаю первую общую базу из текущих данных...','syncWarn');
+      cloud={};
+    }
+
+    syncStatus('4/5 Объединяю локальные + облачные данные без перезаписи...','syncWarn');
+    var merged=mergeCRMSafe(local,cloud);
+    S=ensureSyncShape(merged);
+    S.syncMeta=S.syncMeta||{};
+    S.syncMeta.lastDeviceSyncAt=new Date().toISOString();
+    save();
+    renderAll();
+    if(typeof renderSecurity==='function')renderSecurity();
+    renderSyncSettings();
+
+    syncStatus('5/5 Шифрую объединённую базу и отправляю обратно...','syncWarn');
+    var encrypted=await encryptSyncPayload(S,pass);
+    await supaFetchSafe('POST',{id:getSyncSettings().user,payload:encrypted,updated_at:new Date().toISOString()});
+
+    syncStatus('Готово.\nДанные объединены безопасно.\nBackup был создан перед синхронизацией.\nТеперь это устройство подключено к общей CRM.','syncOk');
+  }catch(e){
+    syncStatus('Синхронизация остановлена:\n'+e.message+'\n\nЛокальные данные не удалены. Перед синком был создан backup.','syncBad');
   }
 }
 
