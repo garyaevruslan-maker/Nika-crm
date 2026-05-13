@@ -156,11 +156,20 @@
 .autoSyncPulse{animation:autoSyncPulse 1.1s ease-in-out infinite alternate}
 @keyframes autoSyncPulse{from{opacity:.55}to{opacity:1}}
 
+
+/* === V5 STABLE AUTO SYNC CSS === */
+.syncBanner{border-radius:14px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.35;border:1px solid rgba(201,169,110,.18);background:rgba(201,169,110,.08);color:var(--muted)}
+.syncBanner.ok{background:rgba(122,173,136,.12);border-color:rgba(122,173,136,.30);color:var(--green)}
+.syncBanner.warn,.syncBanner.pending,.syncBanner.nopass{background:#4f3d16;border-color:rgba(255,215,120,.25);color:#f7e3a2}
+.syncBanner.running{background:rgba(140,180,255,.12);border-color:rgba(140,180,255,.25);color:var(--blue)}
+.syncBanner.err{background:rgba(212,116,99,.14);border-color:rgba(212,116,99,.35);color:var(--red)}
+
 </style>
 </head>
 <body>
 <div id="app">
 <div id="debug" class="debug">Загрузка...</div>
+<div id="syncBanner" class="syncBanner idle">Auto sync: статус появится здесь</div>
 <div id="unsyncBar" class="unsyncBar">Есть несинхронизированные изменения — нажми «Синхронизировать безопасно»</div>
 <section id="screen-home" class="screen active">
 <div class="homeDesktopLeft">
@@ -879,6 +888,347 @@ function autoPullOnOpen(){
   }
   scheduleAutoSync(1200);
 }
+
+
+/* === V5 STABLE AUTO SYNC + SOFT DELETE PATCH === */
+function nowISO(){return new Date().toISOString()}
+function isAlive(o){return !!(o && !o.deleted && !o.deletedAt)}
+function touchV5(o){if(o){if(!o.createdAt)o.createdAt=nowISO();o.updatedAt=nowISO()}return o}
+function softDeleteV5(o){if(o){if(!o.createdAt)o.createdAt=o.updatedAt||nowISO();o.deleted=true;o.deletedAt=nowISO();o.updatedAt=o.deletedAt}return o}
+function aliveClients(){return (S.clients||[]).filter(isAlive)}
+function aliveSessions(){return (S.sessions||[]).filter(function(s){return isAlive(s)&&client(s.clientId)})}
+function alivePayments(){return (S.payments||[]).filter(function(p){return isAlive(p)&&client(p.clientId)})}
+function aliveNotes(){return (S.notes||[]).filter(isAlive)}
+function aliveClientNotes(cid){return (S.clientNotes||[]).filter(function(n){return isAlive(n)&&n.clientId===cid&&client(cid)}).sort(function(a,b){return (b.date||'').localeCompare(a.date||'')})}
+function aliveClientLinks(cid){return (S.clientLinks||[]).filter(function(l){return isAlive(l)&&l.clientId===cid&&client(cid)})}
+
+function purgeTestDataV5(){
+  try{
+    S.syncMeta=S.syncMeta||{};
+    if(S.syncMeta._testDataPurgedV5)return;
+    var testIds={c1:1,s1:1,s2:1,p1:1,n1:1,cn1:1};
+    ['clients','sessions','payments','notes','clientNotes','clientLinks'].forEach(function(k){
+      (S[k]||[]).forEach(function(o){
+        if(o && testIds[o.id])softDeleteV5(o);
+        if(k==='clients' && o && /Тестовый клиент|Анна/.test(String(o.note||'')+String(o.name||'')) && o.id==='c1')softDeleteV5(o);
+      });
+    });
+    S.syncMeta._testDataPurgedV5=true;
+    save();
+  }catch(e){}
+}
+
+function ensureAllMetaV5(data){
+  data=data||{};
+  ['clients','sessions','payments','notes','clientNotes','clientLinks'].forEach(function(k){
+    data[k]=data[k]||[];
+    data[k].forEach(function(o){
+      if(!o)return;
+      if(!o.id)o.id=uid();
+      if(!o.createdAt)o.createdAt=o.updatedAt||o.deletedAt||nowISO();
+      if(!o.updatedAt)o.updatedAt=o.deletedAt||o.createdAt;
+    });
+  });
+  data.security=data.security||{};
+  data.syncMeta=data.syncMeta||{};
+  return data;
+}
+
+/* override client + derived getters so deleted records never show */
+function client(cid){
+  var c=clientRaw(S,cid);
+  return isAlive(c)?c:null;
+}
+function unpaidSessions(cid){
+  return aliveSessions().filter(function(s){return s.status==='debt'&&(!cid||s.clientId===cid)})
+}
+function debtSum(cid,currency){
+  return unpaidSessions(cid).reduce(function(sum,s){return sum+convert(s.amount,s.currency,currency||S.currency)},0)
+}
+function totalPackageLeft(){return aliveClients().reduce(function(n,c){return n+Number(c.packageLeft||0)},0)}
+function activeClients(){return aliveClients().filter(function(c){return c.status==='active'}).length}
+function paymentsByPeriod(scope){
+  scope=scope||period;
+  var now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  return alivePayments().filter(function(p){
+    var d=new Date((p.date||todayISO())+'T00:00:00');
+    return scope==='all'||(scope==='year'&&d.getFullYear()===y)||(scope==='month'&&d.getFullYear()===y&&d.getMonth()===m)
+  })
+}
+function paidIncome(currency,scope){return paymentsByPeriod(scope).reduce(function(sum,p){return sum+convert(p.amount,p.currency,currency||S.currency)},0)}
+function periodSessions(){
+  var now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  return aliveSessions().filter(function(s){
+    var d=new Date(s.date+'T00:00:00');
+    return period==='all'||(period==='year'&&d.getFullYear()===y)||(period==='month'&&d.getFullYear()===y&&d.getMonth()===m)
+  })
+}
+function clientNotes(cid){return aliveClientNotes(cid)}
+function clientLinks(cid){return aliveClientLinks(cid)}
+function clientPaid(cid){
+  return aliveSessions().reduce(function(sum,s){return sum+(s.clientId===cid&&s.status==='paid'?convert(s.amount,s.currency,S.currency):0)},0)
+}
+function findSession(sid){
+  var s=(S.sessions||[]).find(function(x){return x.id===sid});
+  return isAlive(s)?s:null;
+}
+
+/* deletedAt-aware merge */
+function newerRecord(a,b){
+  if(!a)return b;
+  if(!b)return a;
+  var ta=new Date(a.updatedAt||a.deletedAt||0).getTime();
+  var tb=new Date(b.updatedAt||b.deletedAt||0).getTime();
+  if(ta>tb)return a;
+  if(tb>ta)return b;
+  if(a.deleted&&!b.deleted)return a;
+  if(b.deleted&&!a.deleted)return b;
+  return a;
+}
+function mergeArrayByIdSafe(localArr,cloudArr){
+  var map={}, order=[];
+  function add(x){
+    if(!x||!x.id)return;
+    if(!map[x.id]){map[x.id]=x;order.push(x.id);return}
+    map[x.id]=newerRecord(x,map[x.id]);
+  }
+  (cloudArr||[]).forEach(add);
+  (localArr||[]).forEach(add);
+  return order.map(function(k){return map[k]});
+}
+function mergeCRMSafe(localData,cloudData){
+  localData=ensureAllMetaV5(localData||{});
+  cloudData=ensureAllMetaV5(cloudData||{});
+  var merged=clone(cloudData);
+  var lSet=new Date((localData.syncMeta&&localData.syncMeta.settingsUpdatedAt)||0).getTime();
+  var cSet=new Date((cloudData.syncMeta&&cloudData.syncMeta.settingsUpdatedAt)||0).getTime();
+  var settingsSrc=lSet>=cSet?localData:cloudData;
+  merged.currency=settingsSrc.currency||localData.currency||cloudData.currency||'RUB';
+  merged.prices=settingsSrc.prices||localData.prices||cloudData.prices||{USD:80,RUB:7000,BYN:260};
+  merged.clients=mergeArrayByIdSafe(localData.clients,cloudData.clients);
+  merged.sessions=mergeArrayByIdSafe(localData.sessions,cloudData.sessions);
+  merged.payments=mergeArrayByIdSafe(localData.payments,cloudData.payments);
+  merged.notes=mergeArrayByIdSafe(localData.notes,cloudData.notes);
+  merged.clientNotes=mergeArrayByIdSafe(localData.clientNotes,cloudData.clientNotes);
+  merged.clientLinks=mergeArrayByIdSafe(localData.clientLinks,cloudData.clientLinks);
+  merged.security=settingsSrc.security||localData.security||cloudData.security||{};
+  merged.syncMeta=localData.syncMeta||{};
+  Object.keys(cloudData.syncMeta||{}).forEach(function(k){if(merged.syncMeta[k]==null)merged.syncMeta[k]=cloudData.syncMeta[k]});
+  merged.syncMeta.lastMergeAt=nowISO();
+  return ensureAllMetaV5(merged);
+}
+
+/* UI render overrides that never show deleted records */
+function fillSelects(){
+  var html='';
+  aliveClients().forEach(function(c){html+='<option value="'+esc(c.id)+'">'+esc(c.name)+' · пакет '+Number(c.packageLeft||0)+'</option>'});
+  if(id('sessClient'))id('sessClient').innerHTML=html;
+  if(id('paymentClientSelect'))id('paymentClientSelect').innerHTML=html;
+  if(id('editSessClient'))id('editSessClient').innerHTML=html;
+}
+function renderHome(){
+  var q=quotes[new Date().getHours()%quotes.length];
+  id('qPill').innerHTML=esc(q[0]); id('qText').innerHTML=esc(q[1]); id('qAuth').innerHTML=esc(q[2]);
+  id('homeDate').innerHTML=new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  var unpaid=unpaidSessions(), unpaidSum=debtSum(null,S.currency);
+  id('payNow').innerHTML=money(unpaidSum,S.currency); id('payNowN').innerHTML=unpaid.length+' сессий';
+  id('pkgNow').innerHTML=totalPackageLeft(); id('sClients').innerHTML=activeClients();
+  id('sMonth').innerHTML=money(paidIncome(S.currency,'month'),S.currency);
+  id('sMonthN').innerHTML=paymentsByPeriod('month').length+' оплат';
+  id('sUnpaid').innerHTML=money(unpaidSum,S.currency); id('sUnpaidN').innerHTML=unpaid.length+' сессий';
+  id('sTotal').innerHTML=money(paidIncome(S.currency,'all'),S.currency);
+  var debts='';
+  aliveClients().forEach(function(c){
+    var ds=debtSum(c.id,c.currency);
+    if(ds>0)debts+='<div class="row dangerLine" data-client="'+esc(c.id)+'"><div class="avatar">'+esc(clientInitial(c))+'</div><div class="grow"><div class="name">'+esc(c.name)+'</div><div class="meta">'+unpaidSessions(c.id).length+' неоплач. сессий</div></div><span class="badge unpaid">'+money(ds,c.currency)+'</span></div>';
+  });
+  id('homeDebts').innerHTML=debts||'<div class="card small">Долгов нет</div>';
+  var html='';
+  aliveSessions().slice().sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time)}).slice(0,6).forEach(function(s){
+    var c=client(s.clientId);
+    if(c)html+='<div class="row" data-client="'+esc(c.id)+'"><div class="avatar">'+esc(clientInitial(c))+'</div><div class="grow"><div class="name">'+esc(c.name)+'</div><div class="meta">'+fmtDate(s.date)+' · '+esc(s.time||'')+' · '+money(s.amount,s.currency)+'</div></div><span class="badge '+sessionClass(s)+'">'+sessionLabel(s)+'</span></div>';
+  });
+  id('homeSessions').innerHTML=html||'<div class="card small">Записей пока нет</div>';
+}
+function renderClients(){
+  var s=(id('search').value||'').toLowerCase(),html='';
+  aliveClients().forEach(function(c){
+    var debt=debtSum(c.id,S.currency), pack=Number(c.packageLeft||0), notes=aliveClientNotes(c.id), last=notes[0];
+    if(filter==='debt'&&debt<=0)return;
+    if(filter==='package'&&pack<=0)return;
+    if(['active','pause','done'].indexOf(filter)>=0&&c.status!==filter)return;
+    if(s&&(c.name+' '+(c.topic||'')+' '+(c.contact||'')).toLowerCase().indexOf(s)<0)return;
+    var line=debt>0?'🔴 долг '+money(debt,S.currency):(pack>0?'🟡 пакет: '+pack+' ост.':'🟢 оплат нет');
+    html+='<div class="row" data-client="'+esc(c.id)+'"><div class="avatar">'+esc(clientInitial(c))+'</div><div class="grow"><div class="name">'+esc(c.name)+'</div><div class="meta">'+esc(c.topic||'без темы')+' · '+line+'</div><div class="meta">работаем с '+fmtDate(c.start||todayISO())+'</div>'+(last?'<div class="clientPreview">Последняя: '+esc(String(last.text||'').slice(0,120))+'</div>':'')+'</div><span class="badge gold">'+esc(statusText(c.status))+'</span></div>';
+  });
+  id('clientsList').innerHTML=html||'<div class="card small">Клиентов пока нет</div>';
+}
+function renderSchedule(){
+  var mn=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  id('calTitle').innerHTML=mn[calDate.getMonth()]+' '+calDate.getFullYear();
+  var first=new Date(calDate.getFullYear(),calDate.getMonth(),1),start=new Date(first),day=first.getDay();
+  if(day===0)day=7;start.setDate(first.getDate()-day+1);
+  var html='',w=['пн','вт','ср','чт','пт','сб','вс'];
+  w.forEach(function(x){html+='<div class="wd">'+x+'</div>'});
+  for(var i=0;i<42;i++){
+    var d=new Date(start);d.setDate(start.getDate()+i);
+    var iso=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+    var cls='day'; if(d.getMonth()!==calDate.getMonth())cls+=' other'; if(iso===todayISO())cls+=' today'; if(iso===selectedDate)cls+=' sel';
+    if(aliveSessions().some(function(s){return s.date===iso}))cls+=' dot';
+    html+='<button class="'+cls+'" data-date="'+iso+'"><span>'+d.getDate()+'</span></button>';
+  }
+  id('calGrid').innerHTML=html; id('selectedTitle').innerHTML=fmtLong(selectedDate);
+  if(typeof renderPrioritySchedule==='function')renderPrioritySchedule();
+  renderSlots();
+}
+function renderSlots(){
+  var html='',start=9*60,end=21*60;
+  for(var m=start;m<=end;m+=30){
+    var t=pad(Math.floor(m/60))+':'+pad(m%60);
+    var ss=aliveSessions().find(function(s){return s.date===selectedDate&&s.time===t});
+    if(ss){
+      var c=client(ss.clientId);
+      html+='<div class="slot"><div class="time">'+t+'</div><div class="book" data-client="'+esc(ss.clientId)+'"><div class="name">'+esc(c?c.name:'клиент')+'</div><div class="meta">'+money(ss.amount,ss.currency)+' · '+sessionLabel(ss)+(ss.note?' · '+esc(ss.note):'')+'</div></div><div class="statusBtns"><button class="sessionEditBtn" data-edit-session="'+esc(ss.id)+'">✎</button><button class="statusBtn paid" data-pay-status="'+esc(ss.id)+'" data-status="paid">✓</button><button class="statusBtn package" data-pay-status="'+esc(ss.id)+'" data-status="package">пакет</button><button class="statusBtn debt" data-pay-status="'+esc(ss.id)+'" data-status="debt">долг</button><button class="statusBtn edit" data-edit-pay="'+esc(ss.id)+'">₽</button></div></div>';
+    } else html+='<div class="slot"><div class="time">'+t+'</div><div class="empty">свободно</div><button class="tiny" data-add-slot="'+t+'">+</button></div>';
+  }
+  id('slots').innerHTML=html;
+}
+function renderNotes(){
+  var html='';
+  aliveNotes().slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'')}).forEach(function(n){
+    html+='<div class="row" data-note="'+esc(n.id)+'"><div class="grow"><div class="noteDate">'+fmtDate(n.date)+'</div><div class="noteText">'+esc(n.text)+'</div></div></div>';
+  });
+  id('notesList').innerHTML=html||'<div class="card small">Мыслей пока нет</div>';
+}
+function renderAnalytics(){
+  var arr=periodSessions(), paid=0, unpaid=0, unhtml='', plist='';
+  arr.forEach(function(s){
+    var c=client(s.clientId);
+    if(s.status==='paid')paid+=convert(s.amount,s.currency,S.currency);
+    else if(s.status==='debt'){
+      unpaid+=convert(s.amount,s.currency,S.currency);
+      unhtml+='<div class="row dangerLine" data-client="'+esc(s.clientId)+'"><div class="grow"><div class="name">'+esc(c?c.name:'клиент')+'</div><div class="meta">'+fmtDate(s.date)+' · '+esc(s.time||'')+'</div></div><div>'+money(s.amount,s.currency)+'</div><button class="mini" data-edit-pay="'+esc(s.id)+'">править</button></div>';
+    }
+  });
+  alivePayments().slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'')}).forEach(function(p){
+    var c=client(p.clientId);
+    plist+='<div class="row"><div class="grow"><div class="name">'+esc(c?c.name:'клиент')+'</div><div class="meta">'+fmtDate(p.date||todayISO())+' · '+esc(p.type)+' · '+esc(p.comment||'')+'</div></div><span class="badge paid">'+money(p.amount,p.currency)+'</span><button class="mini" data-edit-payment="'+esc(p.id)+'">✎</button></div>';
+  });
+  id('aIncome').innerHTML=money(paidIncome(S.currency,period),S.currency);
+  id('aUnpaid').innerHTML=money(unpaid,S.currency);
+  if(id('aPayments'))id('aPayments').innerHTML=paymentsByPeriod(period).length;
+  if(id('aPackages'))id('aPackages').innerHTML=alivePayments().filter(function(p){return p.type==='package'}).length;
+  if(id('paymentsList'))id('paymentsList').innerHTML=plist||'<div class="card small">Оплат пока нет</div>';
+  id('unpaidList').innerHTML=unhtml||'<div class="card small">Неоплаченных нет</div>';
+  id('curCurrency').value=S.currency; id('priceUSD').value=S.prices.USD; id('priceRUB').value=S.prices.RUB; id('priceBYN').value=S.prices.BYN;
+}
+
+/* soft-delete overrides */
+function deleteClient(){
+  if(!currentClient||!confirm('Удалить клиента и его сессии?'))return;
+  var cid=currentClient, c=clientRaw(S,cid);
+  if(c)softDeleteV5(c);
+  (S.sessions||[]).forEach(function(s){if(s.clientId===cid)softDeleteV5(s)});
+  (S.payments||[]).forEach(function(p){if(p.clientId===cid)softDeleteV5(p)});
+  (S.clientNotes||[]).forEach(function(n){if(n.clientId===cid)softDeleteV5(n)});
+  (S.clientLinks||[]).forEach(function(l){if(l.clientId===cid)softDeleteV5(l)});
+  currentClient=null; save(); markUnsynced(); closeModals(); renderAll(); scheduleAutoSync(1500);
+}
+function deleteSession(){
+  var sid=id('payEditSessionId').value, s=findSession(sid);
+  if(!s||!confirm('Удалить сессию?'))return;
+  var c=client(s.clientId); if(c&&s.status==='package'){c.packageLeft=Number(c.packageLeft||0)+1;touchV5(c)}
+  softDeleteV5(s); save(); markUnsynced(); closeModals(); renderAll(); if(currentClient)openDetail(currentClient); scheduleAutoSync(1500);
+}
+function deleteEditedSession(){
+  var sid=id('editSessionId').value, s=findSession(sid);
+  if(!sid||!s||!confirm('Удалить эту сессию?'))return;
+  var c=client(s.clientId); if(c&&s.status==='package'){c.packageLeft=Number(c.packageLeft||0)+1;touchV5(c)}
+  softDeleteV5(s); save(); markUnsynced(); closeModals(); renderAll(); scheduleAutoSync(1500);
+}
+function deletePayment(){
+  var pid=id('paymentId').value, p=(S.payments||[]).find(function(x){return x.id===pid});
+  if(!pid||!p||!confirm('Удалить оплату?'))return;
+  var c=client(p.clientId); if(c&&p.type==='package'){c.packageLeft=Math.max(0,Number(c.packageLeft||0)-Number(p.sessions||0));touchV5(c)}
+  softDeleteV5(p); save(); markUnsynced(); closeModals(); renderAll(); if(currentClient)openDetail(currentClient); scheduleAutoSync(1500);
+}
+function deleteSavedLink(lid){var l=(S.clientLinks||[]).find(function(x){return x.id===lid}); if(l)softDeleteV5(l); save(); markUnsynced(); renderClientLinks(); renderAll(); scheduleAutoSync(1500)}
+function deleteNote(){if(!editingNote){closeModals();return}var n=(S.notes||[]).find(function(x){return x.id===editingNote}); if(n)softDeleteV5(n); save(); markUnsynced(); closeModals(); renderAll(); scheduleAutoSync(1500)}
+function deleteNoteFn(){deleteNote()}
+function deleteClientNote(){var nid=id('clientNoteId').value; var n=(S.clientNotes||[]).find(function(x){return x.id===nid}); if(n)softDeleteV5(n); save(); markUnsynced(); closeModals(); renderAll(); if(currentClient)openDetail(currentClient); scheduleAutoSync(1500)}
+function deleteClientNoteFn(){deleteClientNote()}
+
+/* status banner + stronger auto sync */
+function setSyncBannerV5(kind,msg){
+  var b=id('syncBanner'); if(!b)return;
+  b.className='syncBanner '+(kind||'idle');
+  b.innerHTML=esc(msg);
+}
+function syncPassReadyV5(){var p=id('syncPass')?id('syncPass').value:'';return !!(p&&p.length>=8)}
+function syncCredsReadyV5(){var c=getSyncSettings();return !!(c&&c.url&&c.key&&c.user)}
+function renderSyncBanner(){
+  if(!getAutoSyncEnabled()){setSyncBannerV5(hasUnsynced()?'warn':'idle',hasUnsynced()?'Есть изменения. Auto sync выключен — синхронизируй вручную.':'Auto sync выключен.');return}
+  if(!syncCredsReadyV5()){setSyncBannerV5('warn','Auto sync включен, но не заполнены URL/key/ID в «Защите».');return}
+  if(!syncPassReadyV5()){setSyncBannerV5('nopass','Нужен пароль синхронизации. Введи его во вкладке «Защита», тогда auto sync запустится.');return}
+  if(autoSyncRunning){setSyncBannerV5('running','Синхронизирую…');return}
+  if(hasUnsynced()){setSyncBannerV5('pending','Есть изменения — CRM синхронизирует автоматически.');return}
+  setSyncBannerV5('ok','Синхронизировано'+(autoSyncLastRun?' · '+new Date(autoSyncLastRun).toLocaleTimeString('ru-RU'):''));
+}
+function markUnsynced(){
+  try{localStorage.setItem('nika_unsynced_changes','1')}catch(e){}
+  renderSyncBanner();
+  if(typeof scheduleAutoSync==='function')scheduleAutoSync(5000);
+}
+function clearUnsynced(){
+  try{localStorage.removeItem('nika_unsynced_changes')}catch(e){}
+  renderSyncBanner();
+}
+function hasUnsynced(){try{return localStorage.getItem('nika_unsynced_changes')==='1'}catch(e){return false}}
+
+var _oldScheduleAutoSync = typeof scheduleAutoSync==='function'?scheduleAutoSync:null;
+function scheduleAutoSync(delay){
+  delay=delay==null?5000:delay;
+  if(!getAutoSyncEnabled())return;
+  if(!syncCredsReadyV5()||!syncPassReadyV5()){renderSyncBanner();return}
+  if(autoSyncTimer)clearTimeout(autoSyncTimer);
+  autoSyncTimer=setTimeout(function(){autoSyncNow('v5')},delay);
+  renderSyncBanner();
+}
+function autoPullOnOpen(){
+  purgeTestDataV5();
+  ensureAllMetaV5(S);
+  save();
+  renderSyncBanner();
+  if(getAutoSyncEnabled()&&syncCredsReadyV5()&&syncPassReadyV5())scheduleAutoSync(900);
+}
+function saveAutoSyncSetting(){
+  var t=id('autoSyncToggle');
+  setAutoSyncEnabled(!!(t&&t.checked));
+  renderAutoSyncSetting();
+  renderSyncBanner();
+  if(getAutoSyncEnabled())scheduleAutoSync(1200);
+}
+
+/* add focus/visibility triggers once */
+if(!window.__nikaV5AutoEvents){
+  window.__nikaV5AutoEvents=true;
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')autoPullOnOpen()});
+  window.addEventListener('focus',function(){autoPullOnOpen()});
+  window.addEventListener('online',function(){autoPullOnOpen()});
+}
+
+/* wrap init */
+document.addEventListener('DOMContentLoaded',function(){
+  try{
+    purgeTestDataV5();
+    ensureAllMetaV5(S);
+    save();
+    renderSyncBanner();
+    autoPullOnOpen();
+  }catch(e){
+    console.error(e);
+  }
+});
 
 })();
 </script>
