@@ -252,6 +252,7 @@
   <button class="ghost danger" data-action="clearSyncSettings">Очистить настройки синхронизации</button>
   <div id="syncStatus" class="statusLine">Сначала скачай backup на Mac и iPhone. Потом подключай синхронизацию.</div>
   <div id="syncHelpTextV2" class="statusLine">Если на iPhone ошибка — нажми «Проверить соединение». Если пишет про пароль — значит пароль шифрования отличается от Mac.</div>
+<div class="statusLine">Пароль сохранится локально на этом устройстве после «Сохранить настройки», чтобы auto sync работал проще.</div>
 </div>
 </section>
 
@@ -436,13 +437,35 @@ function getSyncSettings(){
   S.security.sync=S.security.sync||{url:'',key:'',user:'nika-main'};
   return S.security.sync;
 }
+
+/* === SIMPLE PASSWORD SAVE PATCH - DIRECT SAFE === */
+function syncPassKeySafe(){return 'nika_sync_pass_local_safe_v1'}
+function getSavedSyncPassSafe(){try{return localStorage.getItem(syncPassKeySafe())||''}catch(e){return ''}}
+function saveSyncPassSafe(){
+  try{
+    var el=id('syncPass');
+    var p=el?String(el.value||''):'';
+    if(p && p.length>=8)localStorage.setItem(syncPassKeySafe(),p);
+  }catch(e){}
+}
+function fillSyncPassSafe(){
+  try{
+    var el=id('syncPass');
+    if(!el)return;
+    if(!el.value){
+      var p=getSavedSyncPassSafe();
+      if(p)el.value=p;
+    }
+  }catch(e){}
+}
+
 function renderSyncSettings(){
   if(!id('syncUrl'))return;
   var c=getSyncSettings();
   id('syncUrl').value=c.url||'';
   id('syncKey').value=c.key||'';
   id('syncUser').value=c.user||'nika-main';
-  id('syncPass').value='';
+  fillSyncPassSafe();
 }
 function saveSyncSettings(){
   S.security=S.security||{};
@@ -534,7 +557,8 @@ async function syncNowSafe(){
   try{
     syncStatus('1/5 Создаю локальный backup перед синхронизацией...','syncWarn');
     makeManualBackupBeforeSync();
-    var pass=id('syncPass').value;
+    fillSyncPassSafe();
+    var pass=id('syncPass').value||getSavedSyncPassSafe();
     var local=ensureSyncShape(clone(S));
     syncStatus('2/5 Скачиваю облачные данные...','syncWarn');
     var rows=await supaFetchSafe('GET');
@@ -587,7 +611,7 @@ function saveSyncSettings(){
   if(id('syncKey'))id('syncKey').value=S.security.sync.key;
   if(id('syncUser'))id('syncUser').value=S.security.sync.user;
   save();
-  syncStatus('Настройки сохранены.\nURL и key очищены от пробелов и лишнего /rest/v1.\nПароль не сохраняется — его нужно вводить при синхронизации.','syncOk');if(typeof getAutoSyncEnabled==='function'&&getAutoSyncEnabled())scheduleAutoSync(1200);
+  saveSyncPassSafe();syncStatus('Настройки сохранены.\nПароль сохранён локально на этом устройстве — auto sync сможет работать сам.','syncOk');if(typeof getAutoSyncEnabled==='function'&&getAutoSyncEnabled())scheduleAutoSync(1200);
 }
 function syncReadyV2(){
   var c=getSyncSettings();
@@ -598,7 +622,9 @@ function syncReadyV2(){
   S.security.sync=c;
   save();
 
-  var pass=id('syncPass')?id('syncPass').value:'';
+  fillSyncPassSafe();
+  var pass=id('syncPass')?id('syncPass').value:getSavedSyncPassSafe();
+  if(pass&&pass.length>=8)saveSyncPassSafe();
 
   if(!c.url||c.url.indexOf('https://')!==0||c.url.indexOf('.supabase.co')<0){
     syncStatus('Ошибка URL.\nДолжно быть так:\nhttps://xxxxx.supabase.co\nБез /rest/v1 и без пробелов.','syncBad');
@@ -848,7 +874,8 @@ function saveAutoSyncSetting(){
 }
 function autoSyncReadySilent(){
   var c=getSyncSettings();
-  var pass=id('syncPass')?id('syncPass').value:'';
+  fillSyncPassSafe();
+  var pass=id('syncPass')?id('syncPass').value:getSavedSyncPassSafe();
   return !!(getAutoSyncEnabled()&&c&&c.url&&c.key&&c.user&&pass&&pass.length>=8&&window.crypto&&crypto.subtle);
 }
 function scheduleAutoSync(delay){
@@ -1228,6 +1255,24 @@ document.addEventListener('DOMContentLoaded',function(){
   }catch(e){
     console.error(e);
   }
+});
+
+
+/* === SIMPLE PASSWORD SAVE LISTENER - DIRECT SAFE === */
+document.addEventListener('DOMContentLoaded',function(){
+  try{
+    fillSyncPassSafe();
+    var sp=id('syncPass');
+    if(sp && !sp.__safePassBound){
+      sp.__safePassBound=true;
+      sp.addEventListener('input',function(){
+        saveSyncPassSafe();
+        if(typeof renderSyncBanner==='function')renderSyncBanner();
+        if(typeof getAutoSyncEnabled==='function'&&getAutoSyncEnabled()&&typeof scheduleAutoSync==='function')scheduleAutoSync(1200);
+      });
+    }
+    if(typeof autoPullOnOpen==='function')setTimeout(autoPullOnOpen,900);
+  }catch(e){console.error(e)}
 });
 
 })();
